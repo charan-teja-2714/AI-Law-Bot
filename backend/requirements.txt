@@ -1,0 +1,22 @@
+# FastAPI specific (NEW)
+fastapi
+uvicorn
+python-multipart
+
+# Already installed in root venv (will be skipped if present)
+langchain
+langchain_groq
+langchain_community
+langchain_core
+langchain_huggingface
+langchain-pinecone
+langchain-classic
+PyPDF2
+pytesseract
+pdf2image
+pillow
+pinecone-client
+pinecone-text
+transformers
+sentence-transformers
+python-dotenv

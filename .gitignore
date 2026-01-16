@@ -1,0 +1,91 @@
+# ============================================
+# EXCLUDE OLD STREAMLIT APP
+# ============================================
+app.py
+ex.py
+test.py
+upgrade.txt
+utils/
+
+# Old chat sessions (Streamlit)
+chat_sessions/
+
+# ============================================
+# PYTHON / BACKEND
+# ============================================
+# Virtual Environment
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+*.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+medisense.db
+
+# Python cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ============================================
+# REACT / FRONTEND
+# ============================================
+# Dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+
+# Testing
+frontend/coverage/
+
+# Production
+frontend/build/
+
+# Misc
+frontend/.DS_Store
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# ============================================
+# IDE / EDITOR
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================
+# DOCUMENTS (Optional - keep for reference)
+# ============================================
+docs/
+
+# ============================================
+# SYSTEM FILES
+# ============================================
+Thumbs.db
+desktop.ini
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
