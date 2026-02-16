@@ -39,8 +39,10 @@ function MessageList({ messages, isLoading }) {
     // Convert **text** to bold
     formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-    // Convert 🔹 headings to styled headings (remove duplicates)
-    formatted = formatted.replace(/🔹\s*(.+?)\n🔹\s*\1/g, '🔹 $1');
+    // Remove duplicate headings (e.g., "🔹 Similar Landmark Cases" appearing twice)
+    formatted = formatted.replace(/(🔹\s*[^\n]+)\n+\1/g, '$1');
+    
+    // Convert 🔹 headings to styled headings
     formatted = formatted.replace(/🔹\s*(.+)/g, '<h3 class="section-heading">$1</h3>');
 
     // Apply legal term highlighting
