@@ -569,6 +569,7 @@ function ChatInterface() {
           entities={entities}
           onExtractEntities={handleExtractEntities}
           extractingEntities={extractingEntities}
+          analyzingDocument={analyzingDocument}
         />
       )}
 

@@ -104,6 +104,10 @@ function AudioRecorder({ onRecordingComplete, disabled }) {
         alert('Please record for at least 2 seconds.');
         return;
       }
+      // Request any remaining data before stopping
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.requestData();
+      }
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       setIsPaused(false);

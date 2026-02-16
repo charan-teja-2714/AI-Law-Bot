@@ -12,7 +12,8 @@ function DocumentList({
   onClose,
   entities,
   onExtractEntities,
-  extractingEntities
+  extractingEntities,
+  analyzingDocument
 }) {
   const [selectAll, setSelectAll] = useState(false);
 
@@ -88,9 +89,9 @@ function DocumentList({
             <button
               className="analyze-selected-btn"
               onClick={onAnalyze}
-              disabled={selectedDocs.length === 0}
+              disabled={analyzingDocument || selectedDocs.length === 0}
             >
-              📊 Analyze ({selectedDocs.length})
+              {analyzingDocument ? '⏳ Analyzing...' : `📊 Analyze (${selectedDocs.length})`}
             </button>
           </div>
         </div>

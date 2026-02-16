@@ -1796,3 +1796,18 @@ body {
   background: #fee2e2;
   border-color: #dc2626;
 }
+
+
+/* Section Headings in Messages */
+.message-text h3.section-heading {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 24px 0 16px 0;
+  color: var(--primary-navy);
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.message-text h3.section-heading:first-child {
+  margin-top: 0;
+}

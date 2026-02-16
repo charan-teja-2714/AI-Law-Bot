@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Body
 from app.api.models import (
     ChatRequest, ChatResponse, QuestionRequest, QuestionResponse,
     UploadResponse, HistoryResponse, MessageHistory,
@@ -169,7 +169,7 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/analyze-document")
-async def analyze_document(session_id: str, request: dict = None):
+async def analyze_document(session_id: str, request: dict = Body(default=None)):
     """
     Perform structured legal analysis on uploaded document(s)
     Returns IPC, CrPC, BNS sections and legal predictions
@@ -178,7 +178,8 @@ async def analyze_document(session_id: str, request: dict = None):
         document_ids = None
         if request and 'document_ids' in request:
             document_ids = request['document_ids']
-        
+
+        print(f"[ANALYZE] Session: {session_id}, Document IDs: {document_ids}")
         analysis = await chat_service.analyze_document(session_id, document_ids)
 
         if "error" in analysis:
@@ -191,6 +192,8 @@ async def analyze_document(session_id: str, request: dict = None):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print(f"[ANALYZE] Error: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -231,7 +234,7 @@ async def get_session_documents(session_id: str, search: str = None):
 
 
 @router.post("/extract-entities")
-async def extract_entities(session_id: str, request: dict = None):
+async def extract_entities(session_id: str, request: dict = Body(default=None)):
     """
     Extract legal entities from documents with advanced processing
     """
@@ -284,8 +287,10 @@ async def extract_entities(session_id: str, request: dict = None):
 2. LEGAL SECTIONS EXTRACTION:
    - Extract COMPLETE section references
    - Format: "Section [NUMBER] [ACT]"
-   - Examples: "Section 420 IPC", "Section 164(1) CrPC", "Section 5(2) Prevention of Corruption Act"
-   - If act not mentioned but section is (e.g., "Section 420"), try to infer from context
+   - Examples: "Section 420 IPC", "Section 318 BNS", "Section 164(1) CrPC"
+   - IMPORTANT: If IPC section found, also mention BNS equivalent
+     * IPC 302 → also extract "Section 103 BNS"
+     * IPC 420 → also extract "Section 318 BNS"
    - Common acts: IPC, CrPC, BNS, Prevention of Corruption Act, IT Act
 
 3. ACCURACY RULES:

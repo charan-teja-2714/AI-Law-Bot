@@ -47,8 +47,9 @@ CRITICAL INSTRUCTIONS:
 1. Carefully read the document to extract ALL relevant legal information
 2. Identify specific section numbers if mentioned
 3. Infer applicable sections based on the offense described
-4. Provide practical legal guidance
-5. Return ONLY valid JSON (no markdown, no code blocks, no extra text)
+4. ALWAYS provide BOTH IPC and corresponding BNS sections
+5. Provide practical legal guidance
+6. Return ONLY valid JSON (no markdown, no code blocks, no extra text)
 
 JSON Format:
 
@@ -60,9 +61,10 @@ JSON Format:
     "accused": "Name/description if mentioned",
     "witnesses": "Names if mentioned"
   }},
-  "applicable_ipc_sections": [
+  "applicable_sections": [
     {{
-      "section": "420",
+      "ipc_section": "420",
+      "bns_section": "318",
       "title": "Cheating and dishonestly inducing delivery of property",
       "description": "Clear description of what this section covers",
       "relevance": "Specific reason why this applies to the case",
@@ -77,14 +79,6 @@ JSON Format:
       "relevance": "Why it applies"
     }}
   ],
-  "applicable_bns_sections": [
-    {{
-      "section": "318",
-      "title": "Cheating (BNS equivalent of IPC 420)",
-      "description": "Description under new law",
-      "relevance": "Why it applies"
-    }}
-  ],
   "offense_details": {{
     "type": "Economic Offense/Violent Crime/Property Crime/etc",
     "severity": "Minor/Moderate/Serious/Heinous",
@@ -92,7 +86,7 @@ JSON Format:
     "bailable": "Yes/No",
     "compoundable": "Yes/No"
   }},
-  "legal_consequences": "Detailed explanation of potential penalties, imprisonment duration, fines, and other consequences",
+  "legal_consequences": "Detailed explanation of potential penalties, imprisonment duration, fines, and other consequences. Mention both IPC and BNS provisions.",
   "case_number": "FIR/Case number if mentioned in document",
   "similar_cases": [
     "State vs. ABC (2020) - Brief description of similar case",
@@ -115,6 +109,7 @@ JSON Format:
 IMPORTANT RULES:
 - Extract EXACT section numbers if mentioned in the document
 - If no sections mentioned, infer based on offense type
+- ALWAYS map IPC sections to BNS equivalents (IPC 302→BNS 103, IPC 420→BNS 318, etc.)
 - Use empty arrays [] if a category doesn't apply
 - Be specific and detailed in explanations
 - Focus on Indian Penal Code, CrPC, and Bharatiya Nyaya Sanhita
@@ -139,6 +134,20 @@ JSON Response:""",
                 content = content.replace("```", "").strip()
 
             result = json.loads(content)
+            
+            # Convert old format to new format if needed
+            if 'applicable_ipc_sections' in result and 'applicable_sections' not in result:
+                result['applicable_sections'] = []
+                for ipc_sec in result.get('applicable_ipc_sections', []):
+                    result['applicable_sections'].append({
+                        'ipc_section': ipc_sec.get('section', ''),
+                        'bns_section': 'TBD',
+                        'title': ipc_sec.get('title', ''),
+                        'description': ipc_sec.get('description', ''),
+                        'relevance': ipc_sec.get('relevance', ''),
+                        'punishment': ipc_sec.get('punishment', '')
+                    })
+            
             return result
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")

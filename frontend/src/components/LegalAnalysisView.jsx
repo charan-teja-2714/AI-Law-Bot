@@ -25,14 +25,41 @@ function LegalAnalysisView({ analysis, onClose }) {
           <div className="section-value summary-text">{analysis.case_summary || 'N/A'}</div>
         </div>
 
-        {/* IPC Sections */}
-        {analysis.applicable_ipc_sections && analysis.applicable_ipc_sections.length > 0 && (
+        {/* Applicable Sections (IPC + BNS) */}
+        {analysis.applicable_sections && analysis.applicable_sections.length > 0 && (
+          <div className="analysis-section">
+            <div className="section-label">Applicable Sections (IPC & BNS)</div>
+            <div className="sections-list">
+              {analysis.applicable_sections.map((section, idx) => (
+                <div key={idx} className="section-card">
+                  <div className="section-number">
+                    Section {section.ipc_section} IPC (now Section {section.bns_section} BNS)
+                  </div>
+                  <div className="section-desc"><strong>{section.title}</strong></div>
+                  <div className="section-desc">{section.description}</div>
+                  <div className="section-relevance">
+                    <strong>Relevance:</strong> {section.relevance}
+                  </div>
+                  {section.punishment && (
+                    <div className="section-relevance">
+                      <strong>Punishment:</strong> {section.punishment}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Legacy IPC Sections (fallback) */}
+        {(!analysis.applicable_sections || analysis.applicable_sections.length === 0) && 
+         analysis.applicable_ipc_sections && analysis.applicable_ipc_sections.length > 0 && (
           <div className="analysis-section">
             <div className="section-label">Applicable IPC Sections</div>
             <div className="sections-list">
               {analysis.applicable_ipc_sections.map((section, idx) => (
                 <div key={idx} className="section-card">
-                  <div className="section-number">Section {section.section}</div>
+                  <div className="section-number">Section {section.section} IPC</div>
                   <div className="section-desc">{section.description}</div>
                   <div className="section-relevance">
                     <strong>Relevance:</strong> {section.relevance}
