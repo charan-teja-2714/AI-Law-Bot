@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(venvScriptspip install pyaudioop)",
+      "Bash(.venvScriptspip install pyaudioop)"
+    ]
+  }
+}

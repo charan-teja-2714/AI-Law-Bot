@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import routes
 from app.db.database import init_db
 
-app = FastAPI(title="MediSense API", version="1.0.0")
+app = FastAPI(title="AI Law Bot API", version="2.0.0", description="Indian Legal RAG Assistant")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,4 +19,8 @@ app.include_router(routes.router, prefix="/api")
 
 @app.get("/")
 def root():
-    return {"message": "MediSense API is running"}
+    return {
+        "message": "AI Law Bot API is running",
+        "version": "2.0.0",
+        "description": "Indian Legal RAG Assistant"
+    }

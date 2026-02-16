@@ -1,22 +1,40 @@
-# FastAPI specific (NEW)
-fastapi
-uvicorn
-python-multipart
+# FastAPI and server
+fastapi==0.115.0
+uvicorn[standard]==0.31.0
+python-multipart==0.0.17
 
-# Already installed in root venv (will be skipped if present)
-langchain
-langchain_groq
-langchain_community
-langchain_core
-langchain_huggingface
-langchain-pinecone
-langchain-classic
-PyPDF2
-pytesseract
-pdf2image
-pillow
-pinecone-client
-pinecone-text
-transformers
-sentence-transformers
-python-dotenv
+# LangChain and RAG
+langchain==0.3.7
+langchain-groq==0.2.1
+langchain-community==0.3.5
+langchain-core==0.3.15
+langchain-huggingface==0.1.2
+langchain-text-splitters==0.3.2
+
+# Vector Store - FAISS (local)
+faiss-cpu
+
+# Embeddings and ML
+transformers==4.46.3
+sentence-transformers==3.3.1
+torch
+
+# Document Processing
+PyPDF2==3.0.1
+pytesseract==0.3.13
+pdf2image==1.17.0
+pillow==11.0.0
+
+# Audio/Video Processing
+openai-whisper
+pydub==0.25.1
+ffmpeg-python==0.2.0
+
+# Utilities
+python-dotenv==1.0.1
+numpy==1.26.4
+
+# Database (sqlite3 is built-in with Python)
+
+
+when the document uploaded the attachement option should automatically closed after upload

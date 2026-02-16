@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import contextmanager
 
-DB_PATH = "medisense.db"
+DB_PATH = "fir.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -29,8 +29,21 @@ def init_db():
         )
     """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS session_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            document_id TEXT NOT NULL UNIQUE,
+            document_name TEXT NOT NULL,
+            document_type TEXT NOT NULL,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
+        )
+    """)
+    
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_id ON chat_messages(session_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON chat_messages(timestamp)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_doc_session ON session_documents(session_id)")
     
     conn.commit()
     conn.close()
