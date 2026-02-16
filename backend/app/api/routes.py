@@ -14,15 +14,29 @@ router = APIRouter()
 
 
 @router.post("/upload-document", response_model=UploadResponse)
-async def upload_document(file: UploadFile = File(...), session_id: str = None):
+async def upload_document(file: UploadFile = File(...), session_id: str = None, session_token: str = None):
     """
     Upload legal document (PDF)
     """
     try:
+        from app.auth.auth_service import auth_service
         import uuid
         from datetime import datetime
-        document_id = str(uuid.uuid4())
         
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Verify session belongs to user
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM chat_sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            if not row or row["user_id"] != session["user_id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        document_id = str(uuid.uuid4())
         result = await chat_service.process_document(file, session_id, document_id)
         
         # Save to database
@@ -101,12 +115,27 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, session_token: str = Body(...)):
     """
     Chat with AI Law Bot
     Supports multilingual queries and structured output
     """
     try:
+        from app.auth.auth_service import auth_service
+        
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Verify session belongs to user
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM chat_sessions WHERE session_id = ?", (request.session_id,))
+            row = cursor.fetchone()
+            if not row or row["user_id"] != session["user_id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
         response_data = await chat_service.generate_response(
             session_id=request.session_id,
             message=request.message,
@@ -118,12 +147,6 @@ async def chat(request: ChatRequest):
         with get_db() as conn:
             cursor = conn.cursor()
             current_time = datetime.now().isoformat()
-
-            # Ensure session exists
-            cursor.execute(
-                "INSERT OR IGNORE INTO chat_sessions (session_id, created_at, last_activity) VALUES (?, ?, ?)",
-                (request.session_id, current_time, current_time)
-            )
             
             # Update last activity
             cursor.execute(
@@ -396,13 +419,26 @@ async def delete_document(session_id: str, document_id: str):
 
 
 @router.get("/history/{session_id}", response_model=HistoryResponse)
-async def get_history(session_id: str):
+async def get_history(session_id: str, session_token: str):
     """
     Get chat history for a session
     """
     try:
+        from app.auth.auth_service import auth_service
+        
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Verify session belongs to user
         with get_db() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM chat_sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            if not row or row["user_id"] != session["user_id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
             cursor.execute(
                 "SELECT role, content, user_role, timestamp FROM chat_messages WHERE session_id = ? ORDER BY timestamp",
                 (session_id,)
@@ -425,11 +461,18 @@ async def get_history(session_id: str):
 
 
 @router.get("/sessions")
-async def get_all_sessions():
+async def get_all_sessions(session_token: str):
     """
-    Get all chat sessions with their metadata
+    Get all chat sessions for logged-in user
     """
     try:
+        from app.auth.auth_service import auth_service
+        
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -437,13 +480,13 @@ async def get_all_sessions():
                     cs.session_id,
                     cs.created_at,
                     cs.last_activity,
-                    COUNT(cm.id) as message_count,
-                    MAX(cm.timestamp) as last_message_time
+                    COUNT(cm.id) as message_count
                 FROM chat_sessions cs
                 LEFT JOIN chat_messages cm ON cs.session_id = cm.session_id
+                WHERE cs.user_id = ?
                 GROUP BY cs.session_id
                 ORDER BY cs.last_activity DESC
-            """)
+            """, (session["user_id"],))
             rows = cursor.fetchall()
 
             sessions = []
@@ -460,31 +503,45 @@ async def get_all_sessions():
                     "session_id": row["session_id"],
                     "created_at": row["created_at"],
                     "last_activity": row["last_activity"],
-                    "message_count": row["message_count"],
+                    "message_count": row["message_count"] or 0,
                     "preview": preview
                 })
 
             return {"sessions": sessions}
     except Exception as e:
+        import traceback
+        print(f"Error in get_all_sessions: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/sessions/new")
-async def create_new_session():
+async def create_new_session(request: dict = Body(...)):
     """
-    Create a new chat session
+    Create a new chat session for logged-in user
     """
     try:
+        from app.auth.auth_service import auth_service
         import uuid
         from datetime import datetime
+        
+        session_token = request.get('session_token')
+        if not session_token:
+            raise HTTPException(status_code=400, detail="session_token required")
+        
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
         session_id = str(uuid.uuid4())
         current_time = datetime.now().isoformat()
 
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO chat_sessions (session_id, created_at, last_activity) VALUES (?, ?, ?)",
-                (session_id, current_time, current_time)
+                "INSERT INTO chat_sessions (session_id, user_id, created_at, last_activity) VALUES (?, ?, ?, ?)",
+                (session_id, session["user_id"], current_time, current_time)
             )
             conn.commit()
 
@@ -494,13 +551,26 @@ async def create_new_session():
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
+async def delete_session(session_id: str, session_token: str):
     """
     Delete a chat session and all its messages
     """
     try:
+        from app.auth.auth_service import auth_service
+        
+        # Verify session
+        session = auth_service.get_session(session_token)
+        if not session:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # Verify session belongs to user
+            cursor.execute("SELECT user_id FROM chat_sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            if not row or row["user_id"] != session["user_id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
 
             # Delete messages
             cursor.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
@@ -592,3 +662,109 @@ async def check_dependencies():
         results["langchain"] = {"status": "ERROR", "error": str(e)}
 
     return results
+
+
+# Authentication endpoints
+@router.post("/register")
+async def register(username: str = Body(...), password: str = Body(...)):
+    """Register new user"""
+    try:
+        from app.auth.auth_service import auth_service
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Check if username exists
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Username already exists")
+            
+            # Hash password and create user
+            password_hash = auth_service.hash_password(password)
+            cursor.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, password_hash)
+            )
+            conn.commit()
+            
+            # Get user_id
+            user_id = cursor.lastrowid
+            
+            # Create session
+            session_token = auth_service.create_session(user_id, username)
+            
+            return {
+                "success": True,
+                "session_token": session_token,
+                "username": username
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/login")
+async def login(username: str = Body(...), password: str = Body(...)):
+    """Login user"""
+    try:
+        from app.auth.auth_service import auth_service
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get user
+            cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
+            user = cursor.fetchone()
+            
+            if not user:
+                raise HTTPException(status_code=401, detail="Invalid username or password")
+            
+            # Verify password
+            if not auth_service.verify_password(password, user["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid username or password")
+            
+            # Create session
+            session_token = auth_service.create_session(user["id"], user["username"])
+            
+            return {
+                "success": True,
+                "session_token": session_token,
+                "username": user["username"]
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/logout")
+async def logout(session_token: str = Body(...)):
+    """Logout user"""
+    try:
+        from app.auth.auth_service import auth_service
+        auth_service.delete_session(session_token)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/verify-session")
+async def verify_session(session_token: str):
+    """Verify if session is valid"""
+    try:
+        from app.auth.auth_service import auth_service
+        session = auth_service.get_session(session_token)
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        return {
+            "valid": True,
+            "username": session["username"],
+            "user_id": session["user_id"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

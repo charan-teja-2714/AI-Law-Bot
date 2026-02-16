@@ -7,7 +7,7 @@ import LegalAnalysisView from './LegalAnalysisView';
 import DocumentList from './DocumentList';
 import { api } from '../services/api';
 
-function ChatInterface() {
+function ChatInterface({ sessionToken, username, onLogout }) {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [originalMessages, setOriginalMessages] = useState([]); // Store original untranslated messages
@@ -471,6 +471,12 @@ function ChatInterface() {
         </div>
 
         <div className="sidebar-footer">
+          <div className="user-info">
+            <div className="user-name">👤 {username}</div>
+            <button className="logout-btn" onClick={onLogout}>
+              🚪 Logout
+            </button>
+          </div>
           <div className="sidebar-info">
             AI Law Bot v2.0<br />
             Indian Legal Assistant

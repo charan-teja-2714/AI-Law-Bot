@@ -216,6 +216,41 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--light-gray);
+  border-radius: 6px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: white;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
 .sidebar-info {
   font-size: 11px;
   color: var(--text-secondary);
