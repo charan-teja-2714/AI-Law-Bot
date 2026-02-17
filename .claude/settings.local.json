@@ -3,7 +3,8 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(venvScriptspip install pyaudioop)",
-      "Bash(.venvScriptspip install pyaudioop)"
+      "Bash(.venvScriptspip install pyaudioop)",
+      "Bash(Test-Path \"i:\\\\Final Year Projects\\\\FIR-RAG\\\\README.md\")"
     ]
   }
 }
