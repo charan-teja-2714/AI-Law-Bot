@@ -111,7 +111,8 @@ class ChatService:
         session_id: str,
         message: str,
         user_language: str = "en",
-        structured_output: bool = False
+        structured_output: bool = False,
+        chat_history: list = None
     ) -> Dict[str, Any]:
         """
         Generate response to user query
@@ -121,6 +122,7 @@ class ChatService:
             message: User query
             user_language: User's language (en, hi, te, ta)
             structured_output: Whether to return structured legal analysis
+            chat_history: List of previous messages [{"role": "user"/"assistant", "content": "..."}]
 
         Returns:
             Dict with response and metadata
@@ -135,12 +137,34 @@ class ChatService:
         else:
             english_query = message
 
-        # Retrieve relevant context from FAISS (if document uploaded)
+        # Rewrite query to fix typos/unclear phrasing before FAISS search.
+        # The frontend always shows the original user text — only the search/context uses this.
+        search_query = english_query
+        try:
+            rewrite_prompt = PromptTemplate(
+                template="""Fix any spelling errors and rephrase this legal query to be clearer. Return ONLY the corrected query text, nothing else. If the query is already clear and correct, return it unchanged.
+
+Query: {query}
+
+Corrected query:""",
+                input_variables=["query"]
+            )
+            rewritten = (rewrite_prompt | self.llm).invoke({"query": english_query})
+            rewritten_text = rewritten.content.strip()
+            if rewritten_text:
+                search_query = rewritten_text
+                if search_query != english_query:
+                    print(f"[REWRITE] Original:  {english_query[:120]}")
+                    print(f"[REWRITE] Rewritten: {search_query[:120]}")
+        except Exception as e:
+            print(f"[REWRITE] Skipped ({e})")
+
+        # Retrieve relevant context from FAISS using the cleaned query
         context = ""
         if session_id in self.sessions or True:  # Always try to query
             results = faiss_store.query(
                 session_id=session_id,
-                query_text=english_query,
+                query_text=search_query,
                 top_k=5,
                 document_ids=None  # Query all documents
             )
@@ -159,6 +183,15 @@ class ChatService:
                 "language": user_language
             }
 
+        # Format conversation history for the prompt
+        history_text = ""
+        if chat_history:
+            for msg in chat_history:
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                # Truncate long messages to avoid bloating the prompt
+                content = msg["content"][:600] if len(msg["content"]) > 600 else msg["content"]
+                history_text += f"{role_label}: {content}\n\n"
+
         # Generate response using LLM with comprehensive legal analysis
         # Works with or without document context
         prompt = PromptTemplate(
@@ -167,17 +200,38 @@ class ChatService:
 Legal Context (Retrieved from Document):
 {context}
 
+Previous Conversation:
+{history}
+
 User Question:
 {question}
 
 RESPONSE GUIDELINES:
 
+0. **CRITICAL - Document Context Check:**
+   - If the user asks to "summarize", "analyze", "explain", "review", or "describe" a document/report/file/case, AND the Legal Context above is empty:
+     → Respond ONLY with: "No document has been uploaded. Please upload a PDF or audio/video file first, then ask me to summarize or analyze it."
+   - Do NOT use Previous Conversation content to answer document-related requests
+   - Only answer from Legal Context when the user references an uploaded document
+
 1. **CRITICAL - Legal Questions ONLY:**
-   - ONLY answer questions related to Indian law, legal procedures, IPC, CrPC, BNS, court procedures, legal rights
-   - If question is NOT legal (e.g., "What is the weather?", "Tell me a joke", "How to cook?"):
-     Respond EXACTLY: "I can only answer questions related to Indian law and legal matters. Please ask a legal question."
-   - Examples of legal questions: sections, FIR, bail, legal rights, court procedures, offenses, punishments
-   - Examples of non-legal: general knowledge, personal advice, non-legal topics
+   - Answer questions related to ANY area of Indian law or law in general
+   - Valid legal topics include (but are NOT limited to):
+     * Criminal law: IPC, BNS, CrPC, BNSS, FIR, bail, arrest, trial
+     * Civil law: contracts, property, torts, damages
+     * Intellectual Property: Copyright Act 1957, Patents Act 1970, Trademarks Act 1999, Trade Secrets, AI-generated content ownership
+     * Employment & Labour: Industrial Disputes Act, Factories Act, POSH Act, wrongful termination
+     * Constitutional law: fundamental rights, writs, PIL
+     * Cyber law: IT Act 2000, data privacy, online offences
+     * Family law: divorce, maintenance, custody, inheritance, succession
+     * Corporate/Commercial: Companies Act, SEBI, contracts, mergers
+     * Consumer law: Consumer Protection Act
+     * Tax law: income tax, GST disputes
+     * Environmental law, land acquisition, administrative law
+   - If the question has ANY connection to law, rights, legal procedures, or legal concepts → ANSWER IT FULLY
+   - ONLY reject if the question is completely unrelated to law: e.g., weather, cooking recipes, sports scores, jokes, pure math
+   - When in doubt, ANSWER as a legal question — do not reject borderline queries
+   - If truly non-legal, respond: "I can only answer questions related to law and legal matters. Please ask a legal question."
 
 2. **Information Source:**
    - If question relates to the retrieved context: Provide DETAILED analysis using that context
@@ -195,13 +249,12 @@ RESPONSE GUIDELINES:
      * IPC 498A → BNS 84-85 (Cruelty by husband)
    - If you don't know exact BNS mapping, mention: "(BNS equivalent: [approximate section])"
 
-4. **Similar Case Laws:**
-   - When user describes a case/incident, suggest 2-3 similar landmark Indian cases ONCE
-   - Include: Case name, year, court, brief facts, and relevance
+4. **Similar Case Laws (CRITICAL - SEPARATE SECTION):**
+   - When user describes a case/incident, suggest 2-3 similar landmark Indian cases
+   - IMPORTANT: Put similar cases in a SEPARATE section at the END with marker: "---SIMILAR_CASES---"
    - Format:
    
-   🔹 Similar Landmark Cases
-   
+   ---SIMILAR_CASES---
    • **Case Name v. State (Year)** - [Court]
      Facts: [Brief description]
      Relevance: [Why it's similar]
@@ -234,29 +287,45 @@ REMEMBER:
 - Suggest similar cases ONLY ONCE
 
 Answer:""",
-                input_variables=["context", "question"]
+                input_variables=["context", "history", "question"]
             )
 
         response_msg = (prompt | self.llm).invoke({
             "context": context,
+            "history": history_text,
             "question": english_query
         })
 
         response_text = response_msg.content.strip()
+        
+        # Separate main content from similar cases
+        main_content = response_text
+        similar_cases = None
+        
+        if "---SIMILAR_CASES---" in response_text:
+            parts = response_text.split("---SIMILAR_CASES---")
+            main_content = parts[0].strip()
+            similar_cases = parts[1].strip() if len(parts) > 1 else None
 
         # Translate response back to user's language
         if user_language != "en":
             print(f"[TRANSLATION] Translating AI response from English to {user_language}")
-            print(f"[TRANSLATION] English response (first 200 chars): {response_text[:200]}")
-            response_text = translation_service.process_response(
-                response_text,
+            print(f"[TRANSLATION] English response (first 200 chars): {main_content[:200]}")
+            main_content = translation_service.process_response(
+                main_content,
                 user_language
             )
-            print(f"[TRANSLATION] Translated response (first 200 chars): {response_text[:200]}")
+            if similar_cases:
+                similar_cases = translation_service.process_response(
+                    similar_cases,
+                    user_language
+                )
+            print(f"[TRANSLATION] Translated response (first 200 chars): {main_content[:200]}")
 
         return {
             "type": "text",
-            "response": response_text,
+            "response": main_content,
+            "similar_cases": similar_cases,
             "language": user_language,
             "retrieved_chunks": len(context.split("\n\n")) if context else 0
         }

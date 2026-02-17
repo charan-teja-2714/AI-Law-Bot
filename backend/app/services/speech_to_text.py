@@ -2,37 +2,37 @@ import os
 import tempfile
 from typing import Dict, Any
 from fastapi import UploadFile
-# Lazy imports: whisper and pydub will be imported when needed
+# Lazy imports: faster_whisper and pydub will be imported when needed
 
 
 class SpeechToTextService:
     """
-    Speech-to-text service using OpenAI Whisper
+    Speech-to-text service using faster-whisper (open source, multilingual)
     Supports audio and video files (extracts audio from video)
     """
 
     SUPPORTED_AUDIO_FORMATS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm", ".mp4"}
     SUPPORTED_VIDEO_FORMATS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
-    def __init__(self, model_size: str = "base"):
+    def __init__(self, model_size: str = "tiny"):
         """
-        Initialize Whisper model (lazy loading)
+        Initialize faster-whisper model (lazy loading)
 
         Args:
             model_size: Whisper model size (tiny, base, small, medium, large)
-                       'base' is good balance between speed and accuracy
+                       'tiny' is the fastest, fully multilingual (99 languages)
         """
         self.model_size = model_size
         self._model = None
 
     @property
     def model(self):
-        """Lazy load Whisper model only when needed"""
+        """Lazy load faster-whisper model only when needed"""
         if self._model is None:
-            import whisper  # Import only when model is actually used
-            print(f"Loading Whisper model: {self.model_size}")
-            self._model = whisper.load_model(self.model_size)
-            print("Whisper model loaded successfully")
+            from faster_whisper import WhisperModel  # Import only when model is actually used
+            print(f"Loading faster-whisper model: {self.model_size}")
+            self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+            print("faster-whisper model loaded successfully")
         return self._model
 
     def extract_audio_from_video(self, video_path: str) -> str:
@@ -95,41 +95,55 @@ class SpeechToTextService:
                 - language: Detected language
                 - segments: List of segments with timestamps
         """
-        import os
         print(f"[WHISPER] Transcribing file: {audio_path}")
         print(f"[WHISPER] File exists: {os.path.exists(audio_path)}")
         print(f"[WHISPER] File size: {os.path.getsize(audio_path) if os.path.exists(audio_path) else 0} bytes")
-        
-        # Transcribe using Whisper with fp16=False for CPU
-        # Lower no_speech_threshold to avoid filtering out speech as silence
-        whisper_options = {
-            "fp16": False,
-            "verbose": True,
+
+        # faster-whisper transcribe options
+        # language=None enables automatic language detection (multilingual)
+        transcribe_options = {
+            "beam_size": 5,
             "no_speech_threshold": 0.3,
-            "logprob_threshold": -1.0,
+            "log_prob_threshold": -1.0,
             "condition_on_previous_text": False,
         }
         if language:
-            whisper_options["language"] = language
+            transcribe_options["language"] = language
 
-        result = self.model.transcribe(audio_path, **whisper_options)
-        
-        print(f"[WHISPER] Transcription complete. Text length: {len(result['text'])}")
-        print(f"[WHISPER] Text: {result['text']}")
-        print(f"[WHISPER] Segments: {len(result.get('segments', []))}")
+        segments_gen, info = self.model.transcribe(audio_path, **transcribe_options)
+
+        # Consume the generator and collect results
+        segments = []
+        text_parts = []
+        for segment in segments_gen:
+            text_parts.append(segment.text)
+            segments.append({
+                "start": segment.start,
+                "end": segment.end,
+                "text": segment.text,
+            })
+
+        full_text = " ".join(text_parts).strip()
+
+        print(f"[WHISPER] Transcription complete. Text length: {len(full_text)}")
+        print(f"[WHISPER] Detected language: {info.language} (probability: {info.language_probability:.2f})")
+        print(f"[WHISPER] Text: {full_text}")
+        print(f"[WHISPER] Segments: {len(segments)}")
 
         return {
-            "text": result["text"].strip(),
-            "language": result["language"],
-            "segments": result["segments"]
+            "text": full_text,
+            "language": info.language,
+            "segments": segments
         }
 
-    async def process_file(self, file: UploadFile) -> Dict[str, Any]:
+    async def process_file(self, file: UploadFile, language: str = None) -> Dict[str, Any]:
         """
         Process audio or video file and extract text
 
         Args:
             file: Uploaded file (audio or video)
+            language: Optional ISO-639-1 language code (en, hi, te, ta, etc.)
+                      None = auto-detect
 
         Returns:
             Dict with:
@@ -165,9 +179,9 @@ class SpeechToTextService:
                 print(f"Converting audio to WAV: {file.filename}")
                 audio_path = self.extract_audio_from_video(tmp_path)
 
-            # Transcribe
-            print(f"Transcribing audio: {file.filename}")
-            result = self.transcribe_audio(audio_path)
+            # Transcribe (pass language hint if provided, otherwise auto-detect)
+            print(f"Transcribing audio: {file.filename}, language: {language or 'auto'}")
+            result = self.transcribe_audio(audio_path, language=language)
 
             # Cleanup
             if os.path.exists(tmp_path):
@@ -196,7 +210,7 @@ class SpeechToTextService:
             if "ffmpeg" in error_msg.lower() or "decoder" in error_msg.lower():
                 raise Exception("FFmpeg not found or not properly installed. Please install FFmpeg to process audio/video files.")
             elif "whisper" in error_msg.lower():
-                raise Exception("Whisper model failed to load. Please check if the model is properly installed.")
+                raise Exception("faster-whisper model failed to load. Please run: pip install faster-whisper")
             else:
                 raise Exception(f"Error processing audio/video file: {error_msg}")
 

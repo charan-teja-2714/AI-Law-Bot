@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ChatInterface from './components/ChatInterface';
-import Auth from './components/Auth';
+import Login from './components/Login';
+import Register from './components/Register';
+import { api } from './services/api';
 import './App.css';
 
 function App() {
@@ -8,17 +10,16 @@ function App() {
   const [sessionToken, setSessionToken] = useState(null);
   const [username, setUsername] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
     const token = localStorage.getItem('session_token');
     const user = localStorage.getItem('username');
     
     if (token && user) {
-      // Verify session is still valid
-      fetch(`http://localhost:8000/api/verify-session?session_token=${token}`)
-        .then(res => {
-          if (res.ok) {
+      api.verifySession(token)
+        .then(data => {
+          if (data) {
             setSessionToken(token);
             setUsername(user);
             setIsAuthenticated(true);
@@ -37,25 +38,23 @@ function App() {
     }
   }, []);
 
-  const handleLogin = (token, user) => {
+  const handleLoginSuccess = (token, user) => {
     setSessionToken(token);
     setUsername(user);
     setIsAuthenticated(true);
+    localStorage.setItem('needs_new_session', 'true');
   };
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/api/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_token: sessionToken })
-      });
+      await api.logout(sessionToken);
     } catch (err) {
       console.error('Logout error:', err);
     }
     
     localStorage.removeItem('session_token');
     localStorage.removeItem('username');
+    localStorage.removeItem('needs_new_session');
     setSessionToken(null);
     setUsername(null);
     setIsAuthenticated(false);
@@ -77,8 +76,16 @@ function App() {
           username={username} 
           onLogout={handleLogout}
         />
+      ) : showRegister ? (
+        <Register 
+          onRegisterSuccess={handleLoginSuccess}
+          onSwitchToLogin={() => setShowRegister(false)}
+        />
       ) : (
-        <Auth onLogin={handleLogin} />
+        <Login 
+          onLoginSuccess={handleLoginSuccess}
+          onSwitchToRegister={() => setShowRegister(true)}
+        />
       )}
     </div>
   );

@@ -41,18 +41,18 @@ function MessageInput({
   const handleAudioRecordingComplete = async (file) => {
     setTranscribing(true);
     try {
-      console.log('Starting transcription...');
-      const result = await onAudioInput(file);
-      console.log('Transcription result:', result);
+      // console.log('Starting transcription...');
+      const result = await onAudioInput(file, language);
+      // console.log('Transcription result:', result);
       if (result && result.text && result.text.trim()) {
         setInput(result.text.trim());
-        console.log('Text set to input:', result.text);
+        // console.log('Text set to input:', result.text);
       } else {
-        console.warn('No text in result:', result);
+        // console.warn('No text in result:', result);
         alert('Could not transcribe audio. Please speak clearly and try again, or ensure your microphone is working properly.');
       }
     } catch (error) {
-      console.error('Transcription error:', error);
+      // console.error('Transcription error:', error);
       alert('Transcription failed. Please try again.');
     } finally {
       setTranscribing(false);

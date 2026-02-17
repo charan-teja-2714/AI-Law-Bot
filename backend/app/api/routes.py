@@ -94,14 +94,15 @@ async def upload_audio_video(file: UploadFile = File(...), session_id: str = Non
 
 
 @router.post("/transcribe-audio")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(file: UploadFile = File(...), language: str = None):
     """
     Transcribe audio to text (for voice input)
+    language: optional ISO-639-1 code (en, hi, te, ta, etc.) — None = auto-detect
     """
     try:
         from app.services.speech_to_text import speech_to_text_service
-        print(f"[TRANSCRIBE] Processing file: {file.filename}")
-        result = await speech_to_text_service.process_file(file)
+        print(f"[TRANSCRIBE] Processing file: {file.filename}, language hint: {language}")
+        result = await speech_to_text_service.process_file(file, language=language)
         print(f"[TRANSCRIBE] Result: {result}")
         response = {
             "text": result.get("text", ""),
@@ -115,7 +116,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, session_token: str = Body(...)):
+async def chat(request: ChatRequest):
     """
     Chat with AI Law Bot
     Supports multilingual queries and structured output
@@ -124,23 +125,32 @@ async def chat(request: ChatRequest, session_token: str = Body(...)):
         from app.auth.auth_service import auth_service
         
         # Verify session
-        session = auth_service.get_session(session_token)
+        session = auth_service.get_session(request.session_token)
         if not session:
             raise HTTPException(status_code=401, detail="Unauthorized")
         
-        # Verify session belongs to user
+        # Verify session belongs to user and fetch recent chat history
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT user_id FROM chat_sessions WHERE session_id = ?", (request.session_id,))
             row = cursor.fetchone()
             if not row or row["user_id"] != session["user_id"]:
                 raise HTTPException(status_code=403, detail="Access denied")
-        
+
+            # Fetch last 6 messages (3 exchanges) for conversation history
+            cursor.execute(
+                "SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY timestamp DESC LIMIT 6",
+                (request.session_id,)
+            )
+            history_rows = cursor.fetchall()
+            chat_history = [{"role": r["role"], "content": r["content"]} for r in reversed(history_rows)]
+
         response_data = await chat_service.generate_response(
             session_id=request.session_id,
             message=request.message,
             user_language=request.language or "en",
-            structured_output=request.structured_output or False
+            structured_output=request.structured_output or False,
+            chat_history=chat_history
         )
 
         # Save to database
@@ -184,7 +194,8 @@ async def chat(request: ChatRequest, session_token: str = Body(...)):
             return ChatResponse(
                 response=response_data.get("response", ""),
                 session_id=request.session_id,
-                language=response_data.get("language")
+                language=response_data.get("language"),
+                similar_cases=response_data.get("similar_cases")
             )
 
     except Exception as e:
@@ -614,6 +625,9 @@ async def translate_text(request: TranslateRequest):
             target_language=request.target_language
         )
     except Exception as e:
+        import traceback
+        print(f"[TRANSLATE] Error: {str(e)}")
+        print(f"[TRANSLATE] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -666,7 +680,7 @@ async def check_dependencies():
 
 # Authentication endpoints
 @router.post("/register")
-async def register(username: str = Body(...), password: str = Body(...)):
+async def register(username: str = Body(...), email: str = Body(...), password: str = Body(...)):
     """Register new user"""
     try:
         from app.auth.auth_service import auth_service
@@ -679,11 +693,16 @@ async def register(username: str = Body(...), password: str = Body(...)):
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Username already exists")
             
+            # Check if email exists
+            cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Email already exists")
+            
             # Hash password and create user
             password_hash = auth_service.hash_password(password)
             cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (username, password_hash)
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                (username, email, password_hash)
             )
             conn.commit()
             
@@ -705,24 +724,27 @@ async def register(username: str = Body(...), password: str = Body(...)):
 
 
 @router.post("/login")
-async def login(username: str = Body(...), password: str = Body(...)):
-    """Login user"""
+async def login(login_id: str = Body(...), password: str = Body(...)):
+    """Login user with username or email"""
     try:
         from app.auth.auth_service import auth_service
         
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # Get user
-            cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
+            # Get user by username or email
+            cursor.execute(
+                "SELECT id, username, password_hash FROM users WHERE username = ? OR email = ?",
+                (login_id, login_id)
+            )
             user = cursor.fetchone()
             
             if not user:
-                raise HTTPException(status_code=401, detail="Invalid username or password")
+                raise HTTPException(status_code=401, detail="Invalid credentials")
             
             # Verify password
             if not auth_service.verify_password(password, user["password_hash"]):
-                raise HTTPException(status_code=401, detail="Invalid username or password")
+                raise HTTPException(status_code=401, detail="Invalid credentials")
             
             # Create session
             session_token = auth_service.create_session(user["id"], user["username"])

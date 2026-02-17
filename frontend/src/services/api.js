@@ -197,17 +197,78 @@ export const api = {
     return response.json();
   },
 
-  transcribeAudio: async (file) => {
+  transcribeAudio: async (file, language = null) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/transcribe-audio`, {
+    const url = language
+      ? `${API_BASE_URL}/transcribe-audio?language=${language}`
+      : `${API_BASE_URL}/transcribe-audio`;
+
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
       throw new Error('Failed to transcribe audio');
+    }
+
+    return response.json();
+  },
+
+  register: async (username, email, password) => {
+    const response = await fetch(`${API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Registration failed');
+    }
+
+    return response.json();
+  },
+
+  login: async (login_id, password) => {
+    const response = await fetch(`${API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login_id, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Login failed');
+    }
+
+    return response.json();
+  },
+
+  logout: async (session_token) => {
+    const response = await fetch(`${API_BASE_URL}/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session_token}`
+      },
+      body: JSON.stringify({ session_token }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Logout failed');
+    }
+
+    return response.json();
+  },
+
+  verifySession: async (session_token) => {
+    const response = await fetch(`${API_BASE_URL}/verify-session?session_token=${session_token}`);
+
+    if (!response.ok) {
+      return null;
     }
 
     return response.json();

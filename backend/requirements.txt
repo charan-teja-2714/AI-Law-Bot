@@ -26,7 +26,7 @@ pdf2image==1.17.0
 pillow==11.0.0
 
 # Audio/Video Processing
-openai-whisper
+faster-whisper
 pydub==0.25.1
 ffmpeg-python==0.2.0
 
@@ -35,6 +35,3 @@ python-dotenv==1.0.1
 numpy==1.26.4
 
 # Database (sqlite3 is built-in with Python)
-
-
-when the document uploaded the attachement option should automatically closed after upload

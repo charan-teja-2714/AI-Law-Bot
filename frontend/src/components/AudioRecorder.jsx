@@ -50,7 +50,7 @@ function AudioRecorder({ onRecordingComplete, disabled }) {
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          console.log('[RECORDER] Data chunk received:', event.data.size, 'bytes');
+          // console.log('[RECORDER] Data chunk received:', event.data.size, 'bytes');
           audioChunksRef.current.push(event.data);
         }
       };
@@ -58,9 +58,9 @@ function AudioRecorder({ onRecordingComplete, disabled }) {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
-        console.log('[RECORDER] Recording stopped. Blob size:', audioBlob.size, 'bytes');
-        console.log('[RECORDER] Chunks collected:', audioChunksRef.current.length);
-        console.log('[RECORDER] MimeType:', mimeType);
+        // console.log('[RECORDER] Recording stopped. Blob size:', audioBlob.size, 'bytes');
+        // console.log('[RECORDER] Chunks collected:', audioChunksRef.current.length);
+        // console.log('[RECORDER] MimeType:', mimeType);
         
         if (audioBlob.size > 100) { // At least 100 bytes
           const extension = mimeType.includes('wav') ? 'wav' : 'webm';
@@ -86,7 +86,7 @@ function AudioRecorder({ onRecordingComplete, disabled }) {
       mediaRecorder.start(100); // Collect data every 100ms
       setIsRecording(true);
       
-      console.log('[RECORDER] Recording started, mimeType:', mimeType);
+      // console.log('[RECORDER] Recording started, mimeType:', mimeType);
 
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);

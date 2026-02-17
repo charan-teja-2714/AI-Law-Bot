@@ -8,6 +8,7 @@ class ChatRequest(BaseModel):
     message: str
     language: Optional[str] = "en"  # en, hi, te, ta
     structured_output: Optional[bool] = False
+    session_token: str
 
 
 class ChatResponse(BaseModel):
@@ -15,6 +16,7 @@ class ChatResponse(BaseModel):
     session_id: str
     language: Optional[str] = "en"
     structured_analysis: Optional[Dict[str, Any]] = None
+    similar_cases: Optional[str] = None
 
 
 class QuestionRequest(BaseModel):

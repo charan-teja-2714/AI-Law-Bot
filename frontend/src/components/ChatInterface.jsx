@@ -38,32 +38,48 @@ function ChatInterface({ sessionToken, username, onLogout }) {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       
-      // First, try to load existing sessions
-      api.getAllSessions().then(data => {
-        const existingSessions = data.sessions || [];
-        setSessions(existingSessions);
-        
-        if (existingSessions.length > 0) {
-          // Load the most recent session
-          setSessionId(existingSessions[0].session_id);
-        } else {
-          // No sessions exist, create a new one
-          api.createNewSession().then(response => {
-            setSessionId(response.session_id);
-            setSessions([{
-              session_id: response.session_id,
+      const needsNewSession = localStorage.getItem('needs_new_session');
+      
+      if (needsNewSession === 'true') {
+        // Create new session after login
+        localStorage.removeItem('needs_new_session');
+        api.createNewSession().then(response => {
+          const newSessionId = response.session_id;
+          setSessionId(newSessionId);
+          // Load existing non-empty sessions, then prepend the new one
+          api.getAllSessions().then(data => {
+            const nonEmptySessions = (data.sessions || []).filter(s => s.message_count > 0);
+            const newSession = {
+              session_id: newSessionId,
               created_at: new Date().toISOString(),
               last_activity: new Date().toISOString(),
               message_count: 0,
               preview: 'New conversation'
-            }]);
-          }).catch(error => {
-            console.error('Failed to create initial session:', error);
+            };
+            setSessions([newSession, ...nonEmptySessions]);
           });
-        }
-      }).catch(error => {
-        console.error('Failed to load sessions:', error);
-      });
+        }).catch(error => {
+          console.error('Failed to create initial session:', error);
+        });
+      } else {
+        // Load sessions and filter out empty ones
+        api.getAllSessions().then(data => {
+          const existingSessions = data.sessions || [];
+          // Filter out sessions with 0 messages
+          const nonEmptySessions = existingSessions.filter(s => s.message_count > 0);
+          setSessions(nonEmptySessions);
+          
+          if (nonEmptySessions.length > 0) {
+            setSessionId(nonEmptySessions[0].session_id);
+          } else {
+            api.createNewSession().then(response => {
+              setSessionId(response.session_id);
+            });
+          }
+        }).catch(error => {
+          console.error('Failed to load sessions:', error);
+        });
+      }
     }
   }, []);
 
@@ -143,7 +159,7 @@ function ChatInterface({ sessionToken, username, onLogout }) {
         setMessages([]);
       }
     } catch (error) {
-      console.log('No history for this session');
+      // console.log('No history for this session');
       setMessages([]);
     }
   };
@@ -151,7 +167,9 @@ function ChatInterface({ sessionToken, username, onLogout }) {
   const loadAllSessions = async () => {
     try {
       const data = await api.getAllSessions();
-      setSessions(data.sessions || []);
+      // Filter out empty sessions (0 messages)
+      const nonEmptySessions = (data.sessions || []).filter(s => s.message_count > 0);
+      setSessions(nonEmptySessions);
     } catch (error) {
       console.error('Failed to load sessions:', error);
     }
@@ -173,14 +191,24 @@ function ChatInterface({ sessionToken, username, onLogout }) {
   const handleNewChat = async () => {
     try {
       const response = await api.createNewSession();
-      setSessionId(response.session_id);
+      const newSessionId = response.session_id;
+      setSessionId(newSessionId);
       setMessages([]);
       setOriginalMessages([]);
       setDocumentUploaded(false);
       setDocumentName('');
       setDocuments([]);
       setSelectedDocs([]);
-      loadAllSessions();
+      // Add the new session directly to the top of the sidebar so it's visible immediately.
+      // loadAllSessions() filters out empty sessions, so we build the entry manually.
+      const newSession = {
+        session_id: newSessionId,
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
+        message_count: 0,
+        preview: 'New conversation'
+      };
+      setSessions(prev => [newSession, ...prev]);
     } catch (error) {
       console.error('Failed to create new session:', error);
     }
@@ -252,10 +280,10 @@ function ChatInterface({ sessionToken, username, onLogout }) {
     setShowUploadMenu(false);
   };
 
-  const handleAudioInput = async (file) => {
+  const handleAudioInput = async (file, lang) => {
     try {
-      const result = await api.transcribeAudio(file);
-      console.log('Transcription API result:', result);
+      const result = await api.transcribeAudio(file, lang || language);
+      // console.log('Transcription API result:', result);
       return result;
     } catch (error) {
       setToast({ message: 'Error transcribing audio: ' + error.message, type: 'error' });
@@ -278,7 +306,13 @@ function ChatInterface({ sessionToken, username, onLogout }) {
       );
 
       // AI response should already be translated by backend
-      const aiMessage = { role: 'assistant', content: response.response };
+      // console.log('[CHAT] Response from backend:', response);
+      const aiMessage = { 
+        role: 'assistant', 
+        content: response.response,
+        similar_cases: response.similar_cases || null
+      };
+      // console.log('[CHAT] AI message with similar_cases:', aiMessage);
       setMessages((prev) => [...prev, aiMessage]);
 
       loadAllSessions(); // Refresh to update preview
@@ -327,12 +361,12 @@ function ChatInterface({ sessionToken, username, onLogout }) {
       return;
     }
     
-    console.log('[EXTRACT] Selected docs:', selectedDocs);
+    // console.log('[EXTRACT] Selected docs:', selectedDocs);
     setExtractingEntities(true);
     setEntities(null); // Clear old entities before extracting
     try {
       const result = await api.extractEntities(sessionId, selectedDocs);
-      console.log('[EXTRACT] Result:', result);
+      // console.log('[EXTRACT] Result:', result);
       setEntities(result.entities);
     } catch (error) {
       setToast({ message: 'Error extracting entities: ' + error.message, type: 'error' });
@@ -401,11 +435,28 @@ function ChatInterface({ sessionToken, username, onLogout }) {
 
   return (
     <>
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay active"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div className={`sidebar ${!sidebarOpen ? 'closed' : ''}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo">
-            ⚖️ AI Law Bot
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+            <div className="sidebar-logo">
+              ⚖️ AI Law Bot
+            </div>
+            <button 
+              className="sidebar-close-btn"
+              onClick={() => setSidebarOpen(false)}
+              title="Close sidebar"
+            >
+              ◀
+            </button>
           </div>
 
           <button className="new-chat-btn" onClick={handleNewChat} disabled={loading || documentLoading}>
@@ -425,7 +476,7 @@ function ChatInterface({ sessionToken, username, onLogout }) {
                   <div
                     key={session.session_id}
                     className={`session-item ${session.session_id === sessionId ? 'active' : ''}`}
-                    onClick={() => handleLoadSession(session.session_id)}
+                    onClick={() => { handleLoadSession(session.session_id); if (window.innerWidth <= 768) setSidebarOpen(false); }}
                   >
                     <div className="session-content">
                       <div className="session-preview">{session.preview}</div>
@@ -487,19 +538,14 @@ function ChatInterface({ sessionToken, username, onLogout }) {
       {/* Main Chat Area */}
       <div className="chat-container">
         <div className="chat-header">
-          <button
-            className="sidebar-toggle-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            title="Toggle sidebar"
-          >
-            {sidebarOpen ? '◀' : '▶'}
-          </button>
-          <button
-            className="hamburger-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            ☰
-          </button>
+          {!sidebarOpen && (
+            <button
+              className="hamburger-btn"
+              onClick={() => setSidebarOpen(true)}
+            >
+              ☰
+            </button>
+          )}
           <div className="header-title">
             <h1>AI Law Bot</h1>
             <p className="header-subtitle">Indian Legal RAG Assistant</p>

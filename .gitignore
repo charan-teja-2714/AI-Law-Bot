@@ -23,6 +23,7 @@ wheels/
 .installed.cfg
 *.egg
 
+.claude
 # Virtual Environment
 backend/venv/
 backend/env/

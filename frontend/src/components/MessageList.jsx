@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function MessageList({ messages, isLoading }) {
+  const [expandedCases, setExpandedCases] = useState({});
   const highlightLegalTerms = (text) => {
     if (!text) return text;
 
@@ -106,7 +107,11 @@ function MessageList({ messages, isLoading }) {
 
   return (
     <div className="message-list">
-      {messages.map((msg, index) => (
+      {messages.map((msg, index) => {
+        if (msg.role === 'assistant') {
+          // console.log(`[MSG ${index}] similar_cases:`, msg.similar_cases);
+        }
+        return (
         <div
           key={index}
           className={`message-row ${msg.role === 'user' ? 'message-row-user' : 'message-row-assistant'}`}
@@ -124,6 +129,24 @@ function MessageList({ messages, isLoading }) {
               className="message-text"
               dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
             />
+            
+            {msg.role === 'assistant' && msg.similar_cases && (
+              <div className="similar-cases-section">
+                <button 
+                  className="view-cases-btn"
+                  onClick={() => setExpandedCases(prev => ({...prev, [index]: !prev[index]}))}
+                >
+                  {expandedCases[index] ? '▼ Hide Similar Cases' : '▶ View Similar Cases'}
+                </button>
+                
+                {expandedCases[index] && (
+                  <div 
+                    className="similar-cases-content"
+                    dangerouslySetInnerHTML={{ __html: formatMessage(msg.similar_cases) }}
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           {msg.role === 'user' && (
@@ -135,7 +158,7 @@ function MessageList({ messages, isLoading }) {
             </div>
           )}
         </div>
-      ))}
+      );})}
 
       {isLoading && (
         <div className="message-row message-row-assistant">
