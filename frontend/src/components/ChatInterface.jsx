@@ -264,14 +264,12 @@ function ChatInterface({ sessionToken, username, onLogout }) {
   const handleAudioVideoUpload = async (file) => {
     setDocumentLoading(true);
     try {
-      const response = await api.uploadAudioVideo(file, sessionId);
-      setToast({ message: `Audio/Video "${file.name}" transcribed successfully!`, type: 'success' });
-      const transcriptionMsg = {
-        role: 'assistant',
-        content: `📝 **Transcription:**\n\n${response.transcription}`
-      };
-      setMessages((prev) => [...prev, transcriptionMsg]);
-      loadDocuments(sessionId);
+      await api.uploadAudioVideo(file, sessionId);
+      setToast({ message: `"${file.name}" transcribed and indexed. You can now ask questions about it.`, type: 'success' });
+      const docs = await api.getDocuments(sessionId, null);
+      const docList = docs.documents || [];
+      setDocuments(docList);
+      setDocumentUploaded(docList.length > 0);
       loadAllSessions();
     } catch (error) {
       setToast({ message: 'Error processing audio/video: ' + error.message, type: 'error' });
@@ -503,21 +501,26 @@ function ChatInterface({ sessionToken, username, onLogout }) {
             <LanguageSelector language={language} onChange={setLanguage} />
           </div>
 
-          {/* Current Session Info */}
+          {/* Uploaded Documents */}
           <div className="sidebar-section">
-            <div className="sidebar-section-title">Documents ({documents.length})</div>
-            <div className="session-info">
-              {documentUploaded ? (
-                <button
-                  className="action-btn"
-                  onClick={() => setShowDocuments(!showDocuments)}
-                >
-                  {showDocuments ? '▼ Hide Documents' : '▶ Show Documents'}
-                </button>
-              ) : (
-                <div className="no-doc">No documents uploaded</div>
-              )}
-            </div>
+            <div className="sidebar-section-title">Uploaded Files ({documents.length})</div>
+            {documents.length === 0 ? (
+              <div className="no-doc">No files uploaded</div>
+            ) : (
+              <div className="uploaded-files-list">
+                {documents.map((doc) => {
+                  const icon = doc.document_type === 'pdf' ? '📄' : doc.document_type === 'video' ? '🎥' : '🎵';
+                  return (
+                    <div key={doc.document_id} className="uploaded-file-item">
+                      <span className="uploaded-file-icon">{icon}</span>
+                      <span className="uploaded-file-name" title={doc.document_name}>
+                        {doc.document_name.length > 22 ? doc.document_name.slice(0, 20) + '…' : doc.document_name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

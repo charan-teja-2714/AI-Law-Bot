@@ -38,6 +38,8 @@ class DocumentProcessor:
         reader = PdfReader(pdf_stream)
 
         texts, metadata = [], []
+        total_pages = len(reader.pages)
+        print(f"[PDF] Processing '{uploaded_pdf.name}' — {total_pages} page(s)")
 
         for page_num, page in enumerate(reader.pages):
             try:
@@ -46,9 +48,11 @@ class DocumentProcessor:
                 continue
 
             if text and text.strip():
+                print(f"[PDF] Page {page_num + 1}: extracted {len(text)} chars")
                 texts.append(text)
                 metadata.append({"source": uploaded_pdf.name, "page": page_num})
             else:
+                print(f"[PDF] Page {page_num + 1}: no text found, running OCR...")
                 # Use OCR for scanned documents
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_stream.getbuffer())

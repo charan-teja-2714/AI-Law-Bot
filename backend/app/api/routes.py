@@ -37,8 +37,11 @@ async def upload_document(file: UploadFile = File(...), session_id: str = None, 
                 raise HTTPException(status_code=403, detail="Access denied")
         
         document_id = str(uuid.uuid4())
+        print(f"\n[PDF UPLOAD] File: {file.filename}")
         result = await chat_service.process_document(file, session_id, document_id)
-        
+        print(f"[PDF UPLOAD] Chunks created: {result['chunks_created']}")
+        print(f"[PDF UPLOAD] Indexed and ready — document_id={document_id}\n")
+
         # Save to database
         with get_db() as conn:
             cursor = conn.cursor()
@@ -47,7 +50,7 @@ async def upload_document(file: UploadFile = File(...), session_id: str = None, 
                 (session_id, document_id, file.filename, "pdf", datetime.now().isoformat())
             )
             conn.commit()
-        
+
         return UploadResponse(
             success=True,
             pdf_name=result["doc_name"],
@@ -69,9 +72,12 @@ async def upload_audio_video(file: UploadFile = File(...), session_id: str = Non
         import uuid
         from datetime import datetime
         document_id = str(uuid.uuid4())
-        
+        print(f"\n[AV UPLOAD] File: {file.filename}")
         result = await chat_service.process_audio_video(file, session_id, document_id)
-        
+        print(f"[AV UPLOAD] Type: {result['file_type']} | Language detected: {result['language']}")
+        print(f"[AV UPLOAD] Transcription ({len(result['transcription'])} chars):\n{result['transcription'][:500]}{'...' if len(result['transcription']) > 500 else ''}")
+        print(f"[AV UPLOAD] Indexed and ready — document_id={document_id}\n")
+
         # Save to database
         with get_db() as conn:
             cursor = conn.cursor()
@@ -80,7 +86,7 @@ async def upload_audio_video(file: UploadFile = File(...), session_id: str = Non
                 (session_id, document_id, file.filename, result["file_type"], datetime.now().isoformat())
             )
             conn.commit()
-        
+
         return AudioVideoUploadResponse(
             success=True,
             filename=result["doc_name"],

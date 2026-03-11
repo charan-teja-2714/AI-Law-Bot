@@ -185,6 +185,36 @@ body {
   text-align: center;
 }
 
+.uploaded-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.uploaded-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--light-gray);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-navy);
+}
+
+.uploaded-file-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.uploaded-file-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .analyze-doc-btn {
   width: 100%;
   padding: 10px 12px;
